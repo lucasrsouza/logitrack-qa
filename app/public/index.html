@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LogiTrack</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header id="topbar" hidden>
+    <span class="brand">LogiTrack</span>
+    <nav>
+      <a href="#/shipments">Embarques</a>
+      <a href="#/shipments/new">Novo embarque</a>
+    </nav>
+    <span class="spacer"></span>
+    <span id="whoami"></span>
+    <button id="logout" type="button" class="link">Sair</button>
+  </header>
+  <div id="toast" data-testid="toast" role="status" hidden></div>
+  <main id="app"></main>
+  <script src="app.js"></script>
+</body>
+</html>

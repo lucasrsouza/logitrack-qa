@@ -1,0 +1,28 @@
+{
+  "name": "logitrack-qa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Automação de testes de API, Web e SQL do LogiTrack (desafio técnico de QA)",
+  "scripts": {
+    "app": "npm start --prefix app",
+    "test": "playwright test",
+    "test:api": "playwright test --project=api",
+    "test:web": "playwright test --project=web",
+    "test:sql": "playwright test --project=sql",
+    "test:bugs": "playwright test --grep @bug",
+    "test:sem-bugs": "playwright test --grep-invert @bug",
+    "report": "playwright show-report",
+    "typecheck": "tsc --noEmit",
+    "verify-app": "cd app && shasum -a 256 -c ../app.sha256"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^24.19.2",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "typescript": "^5.9.3"
+  }
+}

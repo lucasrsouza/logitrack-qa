@@ -1,0 +1,189 @@
+openapi: 3.0.3
+info:
+  title: LogiTrack API
+  version: 1.0.0
+  description: |
+    API de gestão de embarques (logística / comércio exterior).
+    Este documento descreve o comportamento ESPERADO. Divergências entre o que a API faz
+    e o que está descrito aqui são candidatas a defeito.
+servers:
+  - url: http://localhost:3000
+security:
+  - bearerAuth: []
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        '200': { description: OK }
+  /api/__reset:
+    post:
+      summary: Restaura o banco para a massa inicial (uso exclusivo para testes)
+      security: []
+      responses:
+        '204': { description: Banco restaurado }
+  /api/auth/login:
+    post:
+      summary: Autenticação
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: Autenticado. A resposta NÃO deve expor dados sensíveis do usuário.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      name: { type: string }
+                      email: { type: string }
+                      role: { type: string, enum: [admin, analista] }
+        '400': { description: Campos ausentes (VALIDATION_ERROR) }
+        '401': { description: Credenciais inválidas (INVALID_CREDENTIALS) }
+  /api/shipments:
+    get:
+      summary: Lista embarques (paginada, mais recentes primeiro)
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 10 } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/Status' } }
+        - { name: q, in: query, description: 'Busca parcial por referência OU cliente (sem diferenciar maiúsculas)', schema: { type: string } }
+      responses:
+        '200':
+          description: |
+            `meta.total` é o total de registros que atendem aos filtros informados
+            e `meta.totalPages = ceil(total / pageSize)`.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Shipment' } }
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      pageSize: { type: integer }
+                      total: { type: integer }
+                      totalPages: { type: integer }
+        '400': { description: Status inválido (VALIDATION_ERROR) }
+        '401': { description: Token ausente ou inválido (UNAUTHORIZED) }
+    post:
+      summary: Cria embarque (status inicial CREATED)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShipmentInput' }
+      responses:
+        '201': { description: Criado, content: { application/json: { schema: { $ref: '#/components/schemas/Shipment' } } } }
+        '400': { description: Falha de validação (VALIDATION_ERROR) }
+        '401': { description: Token ausente ou inválido }
+        '409': { description: Referência já existente (DUPLICATE_REFERENCE) }
+  /api/shipments/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      summary: Detalha um embarque
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Shipment' } } } }
+        '401': { description: Token ausente ou inválido }
+        '404': { description: Não encontrado (NOT_FOUND) }
+    put:
+      summary: Atualiza dados do embarque (somente status CREATED)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShipmentInput' }
+      responses:
+        '200': { description: Atualizado }
+        '400': { description: Falha de validação }
+        '401': { description: Token ausente ou inválido }
+        '404': { description: Não encontrado }
+        '409': { description: Referência duplicada }
+        '422': { description: Embarque não editável (NOT_EDITABLE) }
+    delete:
+      summary: Remove embarque (somente perfil admin)
+      responses:
+        '204': { description: Removido }
+        '401': { description: Token ausente ou inválido }
+        '403': { description: Perfil sem permissão (FORBIDDEN) }
+        '404': { description: Não encontrado }
+  /api/shipments/{id}/events:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      summary: Histórico de mudanças de status
+      responses:
+        '200': { description: Lista ordenada cronologicamente }
+        '401': { description: Token ausente ou inválido }
+        '404': { description: Não encontrado }
+  /api/shipments/{id}/status:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    patch:
+      summary: Altera o status respeitando o fluxo permitido
+      description: |
+        Fluxo permitido:
+        CREATED → IN_TRANSIT | CANCELLED
+        IN_TRANSIT → CUSTOMS | CANCELLED
+        CUSTOMS → DELIVERED
+        DELIVERED e CANCELLED são estados finais.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/Status' }
+      responses:
+        '200': { description: Status atualizado }
+        '400': { description: Status inexistente (VALIDATION_ERROR) }
+        '401': { description: Token ausente ou inválido }
+        '404': { description: Não encontrado }
+        '422': { description: Transição não permitida (INVALID_TRANSITION) }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    Status:
+      type: string
+      enum: [CREATED, IN_TRANSIT, CUSTOMS, DELIVERED, CANCELLED]
+    ShipmentInput:
+      type: object
+      required: [reference, customer, origin, destination, incoterm, weightKg, valueUsd]
+      properties:
+        reference: { type: string, pattern: '^LT-\d{4}-\d{4}$', example: LT-2026-0100 }
+        customer: { type: string, minLength: 2, maxLength: 80 }
+        origin: { type: string }
+        destination: { type: string, description: 'Deve ser diferente da origem (sem diferenciar maiúsculas)' }
+        incoterm: { type: string, enum: [FOB, CIF, EXW, DAP, DDP] }
+        weightKg: { type: number, exclusiveMinimum: true, minimum: 0, maximum: 30000 }
+        valueUsd: { type: number, exclusiveMinimum: true, minimum: 0, maximum: 10000000, description: 'Valor com até 2 casas decimais, persistido sem perda de centavos' }
+    Shipment:
+      allOf:
+        - $ref: '#/components/schemas/ShipmentInput'
+        - type: object
+          properties:
+            id: { type: integer }
+            status: { $ref: '#/components/schemas/Status' }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
